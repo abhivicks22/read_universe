@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAllParsedBooks, getAllProgress, deleteBookData, getPreferences } from '@/lib/storage';
 import { applyTheme } from '@/lib/themes';
 import type { ReadingProgress } from '@/lib/storage';
+import { supabase } from '@/lib/supabase';
 
 interface LibraryBook {
     fileHash: string;
@@ -61,8 +62,17 @@ export default function LibraryPage() {
 
     const handleDelete = async (fileHash: string) => {
         if (!confirm('Delete this book and all its data (bookmarks, highlights, notes)?')) return;
+
+        // Delete local IndexedDB data immediately to update UI
         await deleteBookData(fileHash);
         setBooks((prev) => prev.filter((b) => b.fileHash !== fileHash));
+
+        // Fire and forget delete to Supabase so it doesn't redownload
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+            supabase.from('books').delete().eq('user_id', session.user.id).eq('file_hash', fileHash).then();
+            supabase.storage.from('books').remove([`${session.user.id}/${fileHash}`]).then();
+        }
     };
 
     const filteredBooks = books.filter((b) =>
