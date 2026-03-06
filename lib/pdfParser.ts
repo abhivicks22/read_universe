@@ -19,8 +19,14 @@ export async function parsePDF(
     // Dynamically import pdfjs-dist (client-side only, avoids SSR DOMMatrix error)
     const pdfjsLib = await import('pdfjs-dist');
 
-    // Use the worker from our public/ folder (matches the exact npm version)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    // On some mobile browsers (iOS Safari), loading a local worker file from public/ can fail
+    // due to strict mime-type checking or service worker conflicts. Fallback to unpkg CDN.
+    try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    } catch (e) {
+        console.warn('Failed to set local worker, falling back to CDN', e);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+    }
 
     const arrayBuffer = await file.arrayBuffer();
 

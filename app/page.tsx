@@ -78,12 +78,12 @@ export default function UploadPage() {
         });
 
         router.push(`/reader?id=${hash}`);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to parse file:', error);
         setIsLoading(false);
         setProgress(null);
         setFileName(null);
-        alert('Failed to parse file. Please try a different file.');
+        alert(`Failed to parse file: ${error.message || String(error)}`);
       }
     },
     [router]
