@@ -37,7 +37,8 @@ export async function pushSync() {
         // 1. Sync Books metadata (skip raw text)
         const localBooks = await getAllParsedBooks();
         for (const book of localBooks) {
-            await supabase.from('books').upsert({
+            console.log(`☁️ Syncing metadata for ${book.fileName}`);
+            const { error: upsertError } = await supabase.from('books').upsert({
                 user_id: userId,
                 file_hash: book.fileHash,
                 file_name: book.fileName,
@@ -46,6 +47,12 @@ export async function pushSync() {
                 parsed_at: book.parsedAt,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id,file_hash' });
+
+            if (upsertError) {
+                console.error('Database Upsert Error:', upsertError);
+                if (typeof window !== 'undefined') alert(`Failed to save book metadata to cloud: ${upsertError.message}`);
+                continue; // Skip trying to upload the physical file if the database rejected the metadata
+            }
 
             // Ensure the raw file is in the storage bucket
             const rawBlob = await getRawFile(book.fileHash);
@@ -86,6 +93,7 @@ export async function pushSync() {
 
                 if (uploadError && uploadError.message !== 'The resource already exists') {
                     console.error('Failed to push raw file to storage:', uploadError);
+                    if (typeof window !== 'undefined') alert(`Failed to upload file to storage: ${uploadError.message}`);
                 } else if (!uploadError) {
                     console.log(`✅ Push success: ${book.fileName}`);
                 }
