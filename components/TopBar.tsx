@@ -2,6 +2,9 @@
 
 import { useReaderStore } from '@/stores/readerStore';
 import { addBookmark, removeBookmark } from '@/lib/storage';
+import { useUser } from '@/hooks/useUser';
+import { pushSync } from '@/lib/syncEngine';
+import { useState, useRef } from 'react';
 import TTSControls from '@/components/TTSControls';
 
 export default function TopBar({
@@ -20,6 +23,12 @@ export default function TopBar({
         setSidebarTab,
         setActiveNotePageEditing, activeNotePageEditing,
     } = useReaderStore();
+
+    const [showSearch, setShowSearch] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSyncing, setIsSyncing] = useState(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const { user } = useUser();
 
     const currentBookmark = bookmarks.find((b) => b.pageNumber === currentPage);
 
@@ -67,6 +76,24 @@ export default function TopBar({
 
             {/* Right */}
             <div className="flex items-center gap-0.5">
+                {/* Sync Button */}
+                {user && (
+                    <button
+                        onClick={async () => {
+                            setIsSyncing(true);
+                            await pushSync();
+                            setTimeout(() => setIsSyncing(false), 1000);
+                        }}
+                        className="p-2 rounded-lg hover:opacity-80"
+                        style={{ color: isSyncing ? 'var(--ag-progress)' : 'var(--ag-text)' }}
+                        title="Force Cloud Sync"
+                    >
+                        <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                    </button>
+                )}
+
                 {/* Search */}
                 <button onClick={toggleSearch} className="p-2 rounded-lg hover:opacity-80" style={{ color: 'var(--ag-text)' }} title="Search (Ctrl+F)">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
