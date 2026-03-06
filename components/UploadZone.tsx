@@ -28,7 +28,7 @@ export default function UploadZone({ onFileSelected, isLoading, progress, fileNa
             e.preventDefault();
             setIsDragging(false);
             const file = e.dataTransfer.files[0];
-            if (file && file.type === 'application/pdf') {
+            if (file && (file.type === 'application/pdf' || file.name.endsWith('.epub'))) {
                 onFileSelected(file);
             }
         },
@@ -66,7 +66,7 @@ export default function UploadZone({ onFileSelected, isLoading, progress, fileNa
             <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.epub"
                 className="hidden"
                 onChange={handleFileChange}
             />
@@ -96,7 +96,7 @@ export default function UploadZone({ onFileSelected, isLoading, progress, fileNa
                         </div>
                         <p className="text-xs mt-3" style={{ color: 'var(--ag-text-muted)' }}>
                             {progress
-                                ? `Parsing page ${progress.current} of ${progress.total}`
+                                ? `Parsing ${progress.current} of ${progress.total}`
                                 : 'Preparing...'}
                         </p>
                     </div>
@@ -125,10 +125,10 @@ export default function UploadZone({ onFileSelected, isLoading, progress, fileNa
                     </div>
 
                     <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--ag-text)' }}>
-                        Drop your PDF here
+                        Drop your file here
                     </h3>
                     <p className="text-sm" style={{ color: 'var(--ag-text-muted)' }}>
-                        or click to browse • PDF files only
+                        or click to browse • PDF & EPUB
                     </p>
                 </div>
             )}

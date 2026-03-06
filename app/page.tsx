@@ -1,12 +1,26 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
 import { parsePDF } from '@/lib/pdfParser';
+import { parseEPUB } from '@/lib/epubParser';
 import { generateFileHash, saveParsedBook, saveProgress, getPreferences } from '@/lib/storage';
 import { themes, applyTheme } from '@/lib/themes';
 import type { ThemeId } from '@/lib/themes';
+import { exportAllData, importAllData } from '@/lib/dataExport';
+
+const FEATURES = [
+  { icon: '📖', title: 'Reflow Text', desc: 'Book-quality rendering with smart paragraph detection' },
+  { icon: '🎨', title: '4 Themes', desc: 'Light, dark, sepia, and midnight reading modes' },
+  { icon: '📚', title: 'Library', desc: 'Manage multiple books with progress tracking' },
+  { icon: '🧠', title: 'AI Entities', desc: 'Auto-detect people, places & organizations' },
+  { icon: '🌍', title: 'Translate', desc: 'Translate selected text into 11 languages' },
+  { icon: '📝', title: 'Annotations', desc: 'Highlights, notes, and bookmarks' },
+  { icon: '🗣️', title: 'Read Aloud', desc: 'Text-to-speech with speed control' },
+  { icon: '📇', title: 'Flashcards', desc: 'Build vocabulary with spaced learning' },
+  { icon: '📱', title: 'Installable', desc: 'Add to home screen — works offline' },
+];
 
 export default function UploadPage() {
   const router = useRouter();
@@ -14,6 +28,8 @@ export default function UploadPage() {
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [currentTheme, setCurrentTheme] = useState<ThemeId>('light');
+  const [importing, setImporting] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
 
   // Initialize theme
   useEffect(() => {
@@ -32,15 +48,14 @@ export default function UploadPage() {
       setProgress({ current: 0, total: 1 });
 
       try {
-        // Generate hash for this file
         const hash = await generateFileHash(file);
 
-        // Parse PDF
-        const result = await parsePDF(file, (current, total) => {
-          setProgress({ current, total });
-        });
+        // Detect format and parse
+        const isEpub = file.name.toLowerCase().endsWith('.epub');
+        const result = isEpub
+          ? await parseEPUB(file, (current, total) => setProgress({ current, total }))
+          : await parsePDF(file, (current, total) => setProgress({ current, total }));
 
-        // Store parsed data in IndexedDB
         await saveParsedBook({
           fileHash: hash,
           fileName: file.name,
@@ -50,7 +65,6 @@ export default function UploadPage() {
           wordCount: result.wordCount,
         });
 
-        // Initialize reading progress
         await saveProgress({
           fileHash: hash,
           fileName: file.name,
@@ -61,14 +75,13 @@ export default function UploadPage() {
           wordCount: result.wordCount,
         });
 
-        // Navigate to reader
         router.push(`/reader?id=${hash}`);
       } catch (error) {
-        console.error('Failed to parse PDF:', error);
+        console.error('Failed to parse file:', error);
         setIsLoading(false);
         setProgress(null);
         setFileName(null);
-        alert('Failed to parse PDF. Please try a different file.');
+        alert('Failed to parse file. Please try a different file.');
       }
     },
     [router]
@@ -79,8 +92,21 @@ export default function UploadPage() {
     applyTheme(themeId);
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const result = await importAllData(file);
+      alert(`Imported ${result.imported} items successfully!`);
+    } catch (err) {
+      alert('Failed to import backup file.');
+    }
+    setImporting(false);
+  };
+
   return (
-    <div className="relative min-h-screen flex items-center justify-center overflow-hidden" style={{ backgroundColor: 'var(--ag-bg)' }}>
+    <div className="relative min-h-screen overflow-hidden" style={{ backgroundColor: 'var(--ag-bg)' }}>
       {/* Floating gradient orbs */}
       <div
         className="absolute w-[500px] h-[500px] rounded-full blur-3xl animate-float"
@@ -92,66 +118,109 @@ export default function UploadPage() {
       />
       <div
         className="absolute w-[300px] h-[300px] rounded-full blur-3xl animate-float-slow"
-        style={{ backgroundColor: 'var(--ag-orb3)', top: '30%', right: '20%' }}
+        style={{ backgroundColor: 'var(--ag-orb3)', top: '50%', right: '25%' }}
       />
 
-      {/* Main content card */}
-      <div className="relative z-10 w-full max-w-lg mx-4">
-        {/* App header */}
-        <div className="text-center mb-8 animate-fade-in">
+      {/* Content */}
+      <div className="relative z-10 max-w-4xl mx-auto px-4 py-12 sm:py-16">
+
+        {/* Hero */}
+        <div className="text-center mb-12 animate-fade-in">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <span className="text-4xl">🚀</span>
-            <h1 className="text-4xl font-bold tracking-tight" style={{ color: 'var(--ag-text)' }}>
+            <span className="text-5xl">🚀</span>
+            <h1 className="text-5xl sm:text-6xl font-bold tracking-tight" style={{ color: 'var(--ag-text)' }}>
               Anti Gravity
             </h1>
           </div>
-          <p className="text-base" style={{ color: 'var(--ag-text-muted)' }}>
+          <p className="text-xl sm:text-2xl font-light max-w-xl mx-auto" style={{ color: 'var(--ag-text-muted)' }}>
             The reading experience that defies everything you know
           </p>
-        </div>
-
-        {/* Upload card */}
-        <div
-          className="rounded-2xl p-1 animate-fade-in"
-          style={{
-            backgroundColor: 'var(--ag-card)',
-            boxShadow: 'var(--ag-shadow-lg)',
-            animationDelay: '0.2s',
-          }}
-        >
-          <UploadZone
-            onFileSelected={handleFileSelected}
-            isLoading={isLoading}
-            progress={progress}
-            fileName={fileName}
-          />
-        </div>
-
-        {/* Feature hints */}
-        <div className="mt-8 grid grid-cols-3 gap-4 animate-fade-in" style={{ animationDelay: '0.4s' }}>
-          {[
-            { icon: '📖', label: 'Reflow text' },
-            { icon: '🎨', label: '4 themes' },
-            { icon: '📚', label: 'Flashcards' },
-          ].map((feature) => (
-            <div
-              key={feature.label}
-              className="text-center py-3 rounded-xl"
-              style={{ backgroundColor: 'var(--ag-card)' }}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider"
+              style={{ backgroundColor: 'var(--ag-accent-soft)', color: 'var(--ag-accent)' }}
             >
-              <span className="text-xl block mb-1">{feature.icon}</span>
-              <span className="text-[11px] font-medium" style={{ color: 'var(--ag-text-muted)' }}>
-                {feature.label}
-              </span>
-            </div>
-          ))}
+              ✦ 100% Free
+            </span>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider"
+              style={{ backgroundColor: 'var(--ag-accent-soft)', color: 'var(--ag-accent)' }}
+            >
+              🔒 No Sign-Up
+            </span>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider"
+              style={{ backgroundColor: 'var(--ag-accent-soft)', color: 'var(--ag-accent)' }}
+            >
+              📱 Installable
+            </span>
+          </div>
         </div>
 
-        {/* Navigation links */}
-        <div className="text-center mt-6 flex items-center justify-center gap-4 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-          <a href="/library" className="text-xs font-medium hover:opacity-80 transition-opacity" style={{ color: 'var(--ag-accent)' }}>📚 Library →</a>
-          <span style={{ color: 'var(--ag-text-muted)' }}>·</span>
-          <a href="/vocabulary" className="text-xs font-medium hover:opacity-80 transition-opacity" style={{ color: 'var(--ag-accent)' }}>📝 Vocabulary →</a>
+        {/* Upload Card */}
+        <div className="max-w-lg mx-auto mb-16 animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div
+            className="rounded-2xl p-1"
+            style={{
+              backgroundColor: 'var(--ag-card)',
+              boxShadow: 'var(--ag-shadow-lg)',
+            }}
+          >
+            <UploadZone
+              onFileSelected={handleFileSelected}
+              isLoading={isLoading}
+              progress={progress}
+              fileName={fileName}
+            />
+          </div>
+        </div>
+
+        {/* Features Grid */}
+        <div className="mb-16 animate-fade-in" style={{ animationDelay: '0.4s' }}>
+          <h2 className="text-center text-sm uppercase tracking-widest font-semibold mb-8" style={{ color: 'var(--ag-text-muted)' }}>
+            Everything you need to read better
+          </h2>
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+            {FEATURES.map((f) => (
+              <div
+                key={f.title}
+                className="text-center p-4 sm:p-5 rounded-xl transition-transform hover:scale-[1.03]"
+                style={{ backgroundColor: 'var(--ag-card)' }}
+              >
+                <span className="text-2xl block mb-2">{f.icon}</span>
+                <span className="text-xs sm:text-sm font-semibold block" style={{ color: 'var(--ag-text)' }}>
+                  {f.title}
+                </span>
+                <span className="text-[10px] sm:text-xs block mt-1" style={{ color: 'var(--ag-text-muted)' }}>
+                  {f.desc}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Links */}
+        <div className="text-center flex flex-wrap items-center justify-center gap-4 mb-12 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+          <a href="/library" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80" style={{ backgroundColor: 'var(--ag-card)', color: 'var(--ag-text)' }}>
+            📚 Library
+          </a>
+          <a href="/vocabulary" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80" style={{ backgroundColor: 'var(--ag-card)', color: 'var(--ag-text)' }}>
+            📝 Vocabulary
+          </a>
+          <button onClick={exportAllData} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80" style={{ backgroundColor: 'var(--ag-card)', color: 'var(--ag-text)' }}>
+            💾 Export Data
+          </button>
+          <button onClick={() => importRef.current?.click()} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-opacity hover:opacity-80" style={{ backgroundColor: 'var(--ag-card)', color: 'var(--ag-text)' }}>
+            {importing ? '⏳' : '📥'} Import
+          </button>
+          <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+        </div>
+
+        {/* Footer */}
+        <div className="text-center animate-fade-in" style={{ animationDelay: '0.6s' }}>
+          <p className="text-[11px]" style={{ color: 'var(--ag-text-muted)' }}>
+            Your data stays on your device • No servers • No tracking • Open source
+          </p>
         </div>
       </div>
 
