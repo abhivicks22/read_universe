@@ -16,15 +16,13 @@ export async function parsePDF(
     // Dynamically import pdfjs-dist (client-side only, avoids SSR DOMMatrix error)
     const pdfjsLib = await import('pdfjs-dist');
 
-    // Set worker source from CDN
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs';
+    // Use the worker from our public/ folder (matches the exact npm version)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
     const arrayBuffer = await file.arrayBuffer();
 
     const loadingTask = pdfjsLib.getDocument({
-        data: arrayBuffer,
-        useSystemFonts: true,
+        data: new Uint8Array(arrayBuffer),
     });
 
     const pdf = await loadingTask.promise;
@@ -42,7 +40,7 @@ export async function parsePDF(
 
         for (const item of textContent.items) {
             const textItem = item as any;
-            if (!textItem.str && textItem.str !== '') continue;
+            if (textItem.str === undefined) continue;
 
             const currentY = textItem.transform ? textItem.transform[5] : null;
 
