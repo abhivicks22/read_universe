@@ -78,15 +78,21 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('books', 'books', false)
 ON CONFLICT (id) DO NOTHING;
 
--- Enable RLS for the books bucket
-CREATE POLICY "Users can upload their own books"
+-- Safely drop existing policies just in case they were misconfigured
+DROP POLICY IF EXISTS "Users can upload their own books" ON storage.objects;
+DROP POLICY IF EXISTS "Users can download their own books" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own books" ON storage.objects;
+
+-- Enable RLS for the books bucket so only logged in users can upload/download
+CREATE POLICY "Users can upload books"
 ON storage.objects FOR INSERT TO authenticated
-WITH CHECK (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
+WITH CHECK (bucket_id = 'books');
 
-CREATE POLICY "Users can download their own books"
+CREATE POLICY "Users can download books"
 ON storage.objects FOR SELECT TO authenticated
-USING (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
+USING (bucket_id = 'books');
 
-CREATE POLICY "Users can delete their own books"
+CREATE POLICY "Users can delete books"
 ON storage.objects FOR DELETE TO authenticated
-USING (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
+USING (bucket_id = 'books');
+
