@@ -10,6 +10,7 @@ import {
 } from '@/lib/storage';
 import { exportAsMarkdown, downloadMarkdown } from '@/lib/exportNotes';
 import { applyTheme } from '@/lib/themes';
+import { formatRawText } from '@/lib/textFormatter';
 import TopBar from '@/components/TopBar';
 import Sidebar from '@/components/Sidebar';
 import ReaderView from '@/components/ReaderView';
@@ -65,7 +66,15 @@ function ReaderContent() {
 
                 const book = await getParsedBook(bookId);
                 if (!book) { window.location.href = '/'; return; }
-                setPages(book.pages, book.fileName, book.fileHash);
+
+                // Load or generate structured content blocks
+                let structured = book.structuredPages;
+                if (!structured || structured.length === 0) {
+                    // Fallback: generate from raw text for existing books
+                    structured = book.pages.map((p: string) => formatRawText(p));
+                }
+
+                setPages(book.pages, book.fileName, book.fileHash, structured);
 
                 const progress = await getProgress(bookId);
                 if (progress && progress.currentPage > 0) setCurrentPage(progress.currentPage);

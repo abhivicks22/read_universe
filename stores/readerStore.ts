@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { ThemeId } from '@/lib/themes';
 import type { Bookmark, Highlight, Note, HighlightColor } from '@/lib/storage';
+import type { ContentBlock } from '@/lib/textFormatter';
 
 interface DictionaryState {
     word: string;
@@ -34,6 +35,9 @@ interface ReaderState {
     fileName: string;
     fileHash: string;
     wordCount: number;
+
+    // Structured content blocks (for book-quality rendering)
+    structuredPages: ContentBlock[][];
 
     // Reading settings
     theme: ThemeId;
@@ -74,7 +78,7 @@ interface ReaderState {
     pagesReadThisSession: Set<number>;
 
     // Actions
-    setPages: (pages: string[], fileName: string, fileHash: string) => void;
+    setPages: (pages: string[], fileName: string, fileHash: string, structuredPages?: ContentBlock[][]) => void;
     setCurrentPage: (page: number) => void;
     nextPage: () => void;
     prevPage: () => void;
@@ -130,6 +134,7 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     fileName: '',
     fileHash: '',
     wordCount: 0,
+    structuredPages: [],
 
     theme: 'light',
     fontFamily: "'Literata', serif",
@@ -162,9 +167,9 @@ export const useReaderStore = create<ReaderState>((set, get) => ({
     pagesReadThisSession: new Set<number>(),
 
     // Page actions
-    setPages: (pages, fileName, fileHash) => {
+    setPages: (pages, fileName, fileHash, structuredPages) => {
         const wordCount = pages.reduce((acc, p) => acc + p.split(/\s+/).filter(Boolean).length, 0);
-        set({ pages, fileName, fileHash, totalPages: pages.length, wordCount, currentPage: 1 });
+        set({ pages, fileName, fileHash, totalPages: pages.length, wordCount, currentPage: 1, structuredPages: structuredPages || [] });
     },
 
     setCurrentPage: (page) => {

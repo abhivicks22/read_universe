@@ -1,8 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
+import { formatTextItems, type ContentBlock, type TextLineItem } from './textFormatter';
+
 export interface ParsedPDF {
     pages: string[];
+    structuredPages: ContentBlock[][];
     totalPages: number;
     wordCount: number;
 }
@@ -28,29 +31,40 @@ export async function parsePDF(
     const pdf = await loadingTask.promise;
     const totalPages = pdf.numPages;
     const pages: string[] = [];
+    const structuredPages: ContentBlock[][] = [];
     let totalWordCount = 0;
 
     for (let i = 1; i <= totalPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
 
-        // Build text from items, preserving paragraph structure
+        // Collect both raw text and font-enriched text items
         let pageText = '';
         let lastY: number | null = null;
+        const textLineItems: TextLineItem[] = [];
 
         for (const item of textContent.items) {
             const textItem = item as any;
             if (textItem.str === undefined) continue;
 
             const currentY = textItem.transform ? textItem.transform[5] : null;
+            const fontSize = textItem.transform ? Math.abs(textItem.transform[0]) : 12;
 
+            // Collect items with font metadata for structured formatting
+            if (textItem.str.trim()) {
+                textLineItems.push({
+                    text: textItem.str,
+                    fontSize,
+                    yPosition: currentY ?? 0,
+                });
+            }
+
+            // Build raw text (unchanged from before — backward compat)
             if (lastY !== null && currentY !== null) {
                 const yDiff = Math.abs(currentY - lastY);
                 if (yDiff > 5) {
-                    // New line
                     pageText += '\n';
                     if (yDiff > 15) {
-                        // Paragraph break
                         pageText += '\n';
                     }
                 } else if (textItem.str && !pageText.endsWith(' ') && !textItem.str.startsWith(' ')) {
@@ -63,6 +77,13 @@ export async function parsePDF(
         }
 
         pages.push(pageText.trim());
+
+        // Generate structured blocks from font-enriched items
+        const structured = textLineItems.length > 0
+            ? formatTextItems(textLineItems)
+            : [{ type: 'paragraph' as const, text: pageText.trim() }];
+        structuredPages.push(structured);
+
         totalWordCount += pageText
             .trim()
             .split(/\s+/)
@@ -71,5 +92,5 @@ export async function parsePDF(
         onProgress?.(i, totalPages);
     }
 
-    return { pages, totalPages, wordCount: totalWordCount };
+    return { pages, structuredPages, totalPages, wordCount: totalWordCount };
 }

@@ -45,6 +45,7 @@ export default function UploadPage() {
           fileHash: hash,
           fileName: file.name,
           pages: result.pages,
+          structuredPages: result.structuredPages,
           totalPages: result.totalPages,
           wordCount: result.wordCount,
         });

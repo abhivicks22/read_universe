@@ -2,8 +2,9 @@
 
 import { useCallback, useRef, useEffect } from 'react';
 import { useReaderStore } from '@/stores/readerStore';
-import { lookupWord, extractContextSentence } from '@/lib/dictionary';
+import { extractContextSentence } from '@/lib/dictionary';
 import { getHighlightBgColor } from '@/components/HighlightPopup';
+import type { ContentBlock } from '@/lib/textFormatter';
 
 export default function ReaderView({ onTranslate }: { onTranslate?: (text: string, x: number, y: number) => void }) {
     const {
@@ -13,47 +14,164 @@ export default function ReaderView({ onTranslate }: { onTranslate?: (text: strin
         fileName, fileHash,
         showDictionary, showHighlightPopup,
         highlights,
+        structuredPages,
     } = useReaderStore();
 
     const contentRef = useRef<HTMLDivElement>(null);
     const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Get highlights for current page
-    const pageHighlights = highlights.filter((h) => h.pageNumber === currentPage);
-
-    // Format text with highlights applied
-    const renderPageContent = (pageText: string, pageNum: number) => {
-        const paragraphs = pageText.split(/\n\n+/).filter((p) => p.trim());
+    // Apply highlight marks to a text string
+    const applyHighlights = (text: string, pageNum: number): React.ReactNode => {
         const hlsForPage = highlights.filter((h) => h.pageNumber === pageNum);
+        if (hlsForPage.length === 0) return text;
 
-        return paragraphs.map((para, idx) => {
-            if (hlsForPage.length === 0) {
-                return <p key={idx} className="mb-4 whitespace-pre-wrap">{para}</p>;
-            }
+        const parts: React.ReactNode[] = [];
+        let remaining = text;
+        let keyIdx = 0;
 
-            // Try to apply highlights to text
-            const parts: React.ReactNode[] = [];
-            let remaining = para;
-            let keyIdx = 0;
-
-            for (const hl of hlsForPage) {
-                const hlIdx = remaining.indexOf(hl.text);
-                if (hlIdx >= 0) {
-                    if (hlIdx > 0) {
-                        parts.push(<span key={keyIdx++}>{remaining.slice(0, hlIdx)}</span>);
-                    }
-                    parts.push(
-                        <mark key={keyIdx++} style={{ backgroundColor: getHighlightBgColor(hl.color), borderRadius: '2px', padding: '0 1px' }}>
-                            {hl.text}
-                        </mark>
-                    );
-                    remaining = remaining.slice(hlIdx + hl.text.length);
+        for (const hl of hlsForPage) {
+            const hlIdx = remaining.indexOf(hl.text);
+            if (hlIdx >= 0) {
+                if (hlIdx > 0) {
+                    parts.push(<span key={keyIdx++}>{remaining.slice(0, hlIdx)}</span>);
                 }
+                parts.push(
+                    <mark key={keyIdx++} style={{ backgroundColor: getHighlightBgColor(hl.color), borderRadius: '2px', padding: '0 1px' }}>
+                        {hl.text}
+                    </mark>
+                );
+                remaining = remaining.slice(hlIdx + hl.text.length);
             }
-            if (remaining) parts.push(<span key={keyIdx++}>{remaining}</span>);
+        }
+        if (remaining) parts.push(<span key={keyIdx++}>{remaining}</span>);
+        return parts.length > 0 ? <>{parts}</> : text;
+    };
 
-            return <p key={idx} className="mb-4 whitespace-pre-wrap">{parts.length > 0 ? parts : para}</p>;
+    // Render structured content blocks (book-quality)
+    const renderStructuredContent = (blocks: ContentBlock[], pageNum: number) => {
+        return blocks.map((block, idx) => {
+            switch (block.type) {
+                case 'heading':
+                    if (block.level === 1) {
+                        return (
+                            <h2 key={idx} style={{
+                                fontFamily,
+                                fontSize: `${fontSize * 1.5}px`,
+                                fontWeight: 700,
+                                lineHeight: 1.3,
+                                marginTop: idx === 0 ? '0.5em' : '2em',
+                                marginBottom: '0.8em',
+                                color: 'var(--ag-text)',
+                                letterSpacing: '-0.01em',
+                                textAlign: 'left',
+                            }}>
+                                {applyHighlights(block.text, pageNum)}
+                            </h2>
+                        );
+                    }
+                    if (block.level === 2) {
+                        return (
+                            <h3 key={idx} style={{
+                                fontFamily,
+                                fontSize: `${fontSize * 1.25}px`,
+                                fontWeight: 600,
+                                lineHeight: 1.3,
+                                marginTop: idx === 0 ? '0.5em' : '1.5em',
+                                marginBottom: '0.6em',
+                                color: 'var(--ag-text)',
+                                textAlign: 'left',
+                            }}>
+                                {applyHighlights(block.text, pageNum)}
+                            </h3>
+                        );
+                    }
+                    return (
+                        <h4 key={idx} style={{
+                            fontFamily,
+                            fontSize: `${fontSize * 1.1}px`,
+                            fontWeight: 600,
+                            lineHeight: 1.4,
+                            marginTop: '1.2em',
+                            marginBottom: '0.5em',
+                            color: 'var(--ag-text)',
+                            textAlign: 'left',
+                        }}>
+                            {applyHighlights(block.text, pageNum)}
+                        </h4>
+                    );
+
+                case 'paragraph':
+                    return (
+                        <p key={idx} style={{
+                            textIndent: idx > 0 ? '1.5em' : '0',
+                            textAlign: 'justify',
+                            hyphens: 'auto',
+                            WebkitHyphens: 'auto',
+                            marginBottom: '0.4em',
+                            lineHeight,
+                        } as React.CSSProperties}>
+                            {applyHighlights(block.text, pageNum)}
+                        </p>
+                    );
+
+                case 'quote':
+                    return (
+                        <p key={idx} style={{
+                            textIndent: '1.5em',
+                            textAlign: 'justify',
+                            hyphens: 'auto',
+                            WebkitHyphens: 'auto',
+                            marginBottom: '0.4em',
+                            lineHeight,
+                            fontStyle: 'italic',
+                        } as React.CSSProperties}>
+                            {applyHighlights(block.text, pageNum)}
+                        </p>
+                    );
+
+                case 'separator':
+                    return (
+                        <div key={idx} style={{
+                            textAlign: 'center',
+                            margin: '1.5em 0',
+                            color: 'var(--ag-text-muted)',
+                            fontSize: `${fontSize * 0.9}px`,
+                            letterSpacing: '0.3em',
+                        }}>
+                            ⁂
+                        </div>
+                    );
+
+                default:
+                    return null;
+            }
         });
+    };
+
+    // Fallback: render raw text paragraphs (no structured data)
+    const renderRawContent = (pageText: string, pageNum: number) => {
+        const paragraphs = pageText.split(/\n\n+/).filter((p) => p.trim());
+        return paragraphs.map((para, idx) => (
+            <p key={idx} style={{
+                textIndent: idx > 0 ? '1.5em' : '0',
+                textAlign: 'justify',
+                hyphens: 'auto',
+                WebkitHyphens: 'auto',
+                marginBottom: '0.4em',
+                lineHeight,
+            } as React.CSSProperties}>
+                {applyHighlights(para, pageNum)}
+            </p>
+        ));
+    };
+
+    // Decide which renderer to use
+    const renderPageContent = (pageText: string, pageNum: number) => {
+        const blocks = structuredPages[pageNum - 1];
+        if (blocks && blocks.length > 0) {
+            return renderStructuredContent(blocks, pageNum);
+        }
+        return renderRawContent(pageText, pageNum);
     };
 
     // Text selection handler — shows highlight popup

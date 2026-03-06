@@ -1,5 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { ThemeId } from './themes';
+import type { ContentBlock } from './textFormatter';
 
 /* ============================================
    Schema
@@ -79,6 +80,7 @@ interface ParsedBook {
     fileHash: string;
     fileName: string;
     pages: string[];
+    structuredPages?: ContentBlock[][];
     totalPages: number;
     wordCount: number;
     parsedAt: string;
@@ -147,7 +149,7 @@ let dbPromise: Promise<IDBPDatabase<AntiGravityDB>> | null = null;
 
 function getDB(): Promise<IDBPDatabase<AntiGravityDB>> {
     if (!dbPromise) {
-        dbPromise = openDB<AntiGravityDB>('antigravity', 3, {
+        dbPromise = openDB<AntiGravityDB>('antigravity', 4, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
                     db.createObjectStore('preferences');
@@ -258,6 +260,7 @@ export async function saveParsedBook(data: {
     fileHash: string;
     fileName: string;
     pages: string[];
+    structuredPages?: ContentBlock[][];
     totalPages: number;
     wordCount: number;
 }): Promise<void> {
