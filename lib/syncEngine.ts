@@ -152,22 +152,26 @@ export async function pullSync() {
 
     try {
         // 0. Pull new books (download raw file and parse)
+        console.log('🔄 Checking for new books to download...');
         const { data: cloudBooks } = await supabase.from('books').select('*');
-        if (cloudBooks) {
+        if (cloudBooks && cloudBooks.length > 0) {
+            console.log(`📡 Found ${cloudBooks.length} books in cloud DB`);
             const localBooks = await getAllParsedBooks();
             for (const cb of cloudBooks) {
                 const existsLocally = localBooks.some(lb => lb.fileHash === cb.file_hash);
                 if (!existsLocally) {
-                    console.log(`Downloading new book from cloud: ${cb.file_name}`);
+                    console.log(`📥 Downloading missing book from storage bucket: ${cb.file_name} (${cb.file_hash})`);
                     const { data: blob, error: downloadError } = await supabase.storage.from('books').download(`${session.user.id}/${cb.file_hash}`);
 
                     if (blob && !downloadError) {
                         try {
+                            console.log(`✅ Downloaded blob for ${cb.file_name}, size: ${Math.round(blob.size / 1024)}KB. Parsing now...`);
                             const isEpub = cb.file_name.toLowerCase().endsWith('.epub');
                             const file = new File([blob], cb.file_name, { type: isEpub ? 'application/epub+zip' : 'application/pdf' });
 
                             const result = isEpub ? await parseEPUB(file) : await parsePDF(file);
 
+                            console.log(`✅ Parse complete for ${cb.file_name}. Saving to IndexedDB...`);
                             await saveParsedBook({
                                 fileHash: cb.file_hash,
                                 fileName: cb.file_name,
@@ -177,20 +181,26 @@ export async function pullSync() {
                                 wordCount: result.wordCount,
                             });
                             await saveRawFile(cb.file_hash, file);
-                            console.log(`Successfully parsed and saved downloaded book: ${cb.file_name}`);
+                            console.log(`🎉 Successfully synced book: ${cb.file_name} to local device`);
 
                             // Let the UI know a new book just magically appeared
                             if (typeof window !== 'undefined') {
                                 window.dispatchEvent(new Event('library-updated'));
                             }
-                        } catch (parseErr) {
-                            console.error('Failed to parse downloaded book:', cb.file_name, parseErr);
+                        } catch (parseErr: any) {
+                            console.error(`💥 Failed to parse downloaded book ${cb.file_name}:`, parseErr.message || String(parseErr));
+                            alert(`Failed to sync book ${cb.file_name}: ${parseErr.message || String(parseErr)}`);
                         }
                     } else if (downloadError) {
-                        console.error('Failed to download book from storage:', downloadError);
+                        console.error('💥 Failed to download book from storage:', downloadError);
+                        alert(`Storage download error: ${downloadError.message}`);
                     }
+                } else {
+                    console.log(`⏭️ Book ${cb.file_name} already exists locally. Skipping download.`);
                 }
             }
+        } else {
+            console.log('🤷 No books found in cloud DB.');
         }
 
         // 1. Pull Progress (Keep latest)
