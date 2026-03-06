@@ -146,15 +146,11 @@ export default function UploadPage() {
           ))}
         </div>
 
-        {/* Vocabulary link */}
-        <div className="text-center mt-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-          <a
-            href="/vocabulary"
-            className="text-xs font-medium hover:opacity-80 transition-opacity"
-            style={{ color: 'var(--ag-accent)' }}
-          >
-            📝 View saved vocabulary →
-          </a>
+        {/* Navigation links */}
+        <div className="text-center mt-6 flex items-center justify-center gap-4 animate-fade-in" style={{ animationDelay: '0.5s' }}>
+          <a href="/library" className="text-xs font-medium hover:opacity-80 transition-opacity" style={{ color: 'var(--ag-accent)' }}>📚 Library →</a>
+          <span style={{ color: 'var(--ag-text-muted)' }}>·</span>
+          <a href="/vocabulary" className="text-xs font-medium hover:opacity-80 transition-opacity" style={{ color: 'var(--ag-accent)' }}>📝 Vocabulary →</a>
         </div>
       </div>
 
