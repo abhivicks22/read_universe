@@ -6,6 +6,7 @@ import UploadZone from '@/components/UploadZone';
 import { parsePDF } from '@/lib/pdfParser';
 import { parseEPUB } from '@/lib/epubParser';
 import { generateFileHash, saveParsedBook, saveProgress, getPreferences, saveRawFile } from '@/lib/storage';
+import { pushSync } from '@/lib/syncEngine';
 import { themes, applyTheme } from '@/lib/themes';
 import type { ThemeId } from '@/lib/themes';
 import { exportAllData, importAllData } from '@/lib/dataExport';
@@ -79,6 +80,9 @@ export default function UploadPage() {
 
         // Store the raw file specifically so the Cloud Sync Engine has the bytes to upload
         await saveRawFile(hash, file);
+
+        // Automatically trigger a background push to the cloud sync engine
+        pushSync().catch(err => console.error('Auto-sync failed:', err));
 
         router.push(`/reader?id=${hash}`);
       } catch (error: any) {
