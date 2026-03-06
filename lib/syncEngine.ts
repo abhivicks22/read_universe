@@ -52,14 +52,38 @@ export async function pushSync() {
             if (rawBlob) {
                 const isEpub = book.fileName.toLowerCase().endsWith('.epub');
                 const contentType = isEpub ? 'application/epub+zip' : 'application/pdf';
-                // Convert to array buffer explicitly to bypass subtle SDK blob-serialization bugs
-                const buffer = await rawBlob.arrayBuffer();
+
+                // Bypass all Javascript binary-upload framework bugs by explicitly converting the file to a base64 string
+                const base64Data = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const result = reader.result as string;
+                        // Result looks like: "data:application/pdf;base64,JVBERi0xLjQK..."
+                        // We only want the raw base64 string after the comma
+                        const base64String = result.split(',')[1];
+                        resolve(base64String);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(rawBlob);
+                });
+
+                // Supabase supports uploading base64 explicitly, completely side-stepping blob casting issues
+                // https://supabase.com/docs/reference/javascript/storage-from-upload
+                // (Though the generic typescript signature complains, it natively supports base64 string via decode helper or just passing the raw buffer from base64)
+
+                // Convert back to pure Uint8Array right before passing to Supabase so the HTTP client forces a raw binary write
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
 
                 console.log(`☁️ Pushing raw file to cloud storage: ${book.fileName}`);
-                const { error: uploadError } = await supabase.storage.from('books').upload(`${userId}/${book.fileHash}`, buffer, {
+                const { error: uploadError } = await supabase.storage.from('books').upload(`${userId}/${book.fileHash}`, bytes, {
                     upsert: false, // Keep it fast: fails silently if it already exists
                     contentType: contentType
                 });
+
                 if (uploadError && uploadError.message !== 'The resource already exists') {
                     console.error('Failed to push raw file to storage:', uploadError);
                 } else if (!uploadError) {
