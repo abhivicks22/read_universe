@@ -94,7 +94,7 @@ export interface BookPage {
 
 export interface RawFile {
     fileHash: string;
-    blob: Blob;
+    blob: Blob | ArrayBuffer; // Support ArrayBuffer to avoid IDB deadlock bugs
 }
 
 interface AntiGravityDB extends DBSchema {
@@ -131,6 +131,7 @@ interface AntiGravityDB extends DBSchema {
         value: RawFile;
     };
     bookmarks: {
+
         key: number;
         value: Bookmark;
         indexes: {
@@ -374,15 +375,20 @@ export async function deleteParsedBook(fileHash: string): Promise<void> {
 /* ============================================
    Raw Files
    ============================================ */
-export async function saveRawFile(fileHash: string, blob: Blob): Promise<void> {
+export async function saveRawFile(fileHash: string, fileData: Blob): Promise<void> {
     const db = await getDB();
-    await db.put('rawFiles', { fileHash, blob });
+    // Convert to ArrayBuffer unconditionally to prevent Chrome IDB lockups
+    const buffer = await fileData.arrayBuffer();
+    await db.put('rawFiles', { fileHash, blob: buffer });
 }
 
 export async function getRawFile(fileHash: string): Promise<Blob | undefined> {
     const db = await getDB();
     const result = await db.get('rawFiles', fileHash);
-    return result?.blob;
+    if (!result?.blob) return undefined;
+
+    // Return to Blob format for Supabase upload
+    return new Blob([result.blob]);
 }
 
 export async function deleteRawFile(fileHash: string): Promise<void> {
