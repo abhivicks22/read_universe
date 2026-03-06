@@ -19,7 +19,7 @@ export function exportAsMarkdown(
     });
 
     lines.push(`# ${bookName.replace('.pdf', '')}`);
-    lines.push(`> Exported from Anti Gravity on ${date}`);
+    lines.push(`> Exported from Universe Read on ${date}\n`);
     lines.push('');
 
     // Stats
@@ -83,7 +83,7 @@ export function exportAsMarkdown(
     }
 
     lines.push('---');
-    lines.push('*Exported with [Anti Gravity](https://read-universe.vercel.app) 🚀*');
+    lines.push('\n---\n*Exported with [Universe Read](https://read-universe.vercel.app) 🚀*');
 
     return lines.join('\n');
 }

@@ -57,7 +57,7 @@ export async function exportAllData(): Promise<void> {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `antigravity-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `universe-read-backup-${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

@@ -129,7 +129,7 @@ export default function UploadPage() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <span className="text-5xl">🚀</span>
             <h1 className="text-5xl sm:text-6xl font-bold tracking-tight" style={{ color: 'var(--ag-text)' }}>
-              Anti Gravity
+              Universe Read
             </h1>
           </div>
           <p className="text-xl sm:text-2xl font-light max-w-xl mx-auto" style={{ color: 'var(--ag-text-muted)' }}>

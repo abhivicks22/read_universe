@@ -9,10 +9,10 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Anti Gravity — PDF Reader",
+  title: "Universe Read — PDF Reader",
   description:
     "The reading experience that defies everything you know. A free, premium browser-based PDF reader with reflow, themes, dictionary, and vocabulary flashcards.",
-  keywords: ["PDF reader", "ebook reader", "anti gravity", "reading", "vocabulary"],
+  keywords: ["PDF reader", "ebook reader", "universe read", "reading", "vocabulary"],
 };
 
 const googleFontsUrl =
@@ -34,7 +34,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#7C3AED" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Anti Gravity" />
+        <meta name="apple-mobile-web-app-title" content="Universe Read" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>

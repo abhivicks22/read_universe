@@ -1,5 +1,5 @@
 // Anti Gravity Service Worker — cache-first for static, network-first for pages
-const CACHE_NAME = 'antigravity-v1';
+const CACHE_NAME = 'universe-read-v1';
 
 const STATIC_ASSETS = [
     '/',

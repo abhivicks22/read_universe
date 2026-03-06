@@ -52,7 +52,7 @@ export default function TopBar({
                 </button>
                 <div className="flex items-center gap-2">
                     <span className="text-lg">🚀</span>
-                    <span className="font-semibold text-sm hidden sm:inline" style={{ color: 'var(--ag-text)' }}>Anti Gravity</span>
+                    <span className="font-semibold text-sm hidden sm:inline" style={{ color: 'var(--ag-text)' }}>Universe Read</span>
                 </div>
                 <span className="text-sm truncate max-w-[100px] sm:max-w-[160px] hidden md:inline" style={{ color: 'var(--ag-text-muted)' }}>{fileName}</span>
             </div>
