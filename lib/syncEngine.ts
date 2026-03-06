@@ -50,11 +50,20 @@ export async function pushSync() {
             // Ensure the raw file is in the storage bucket
             const rawBlob = await getRawFile(book.fileHash);
             if (rawBlob) {
-                const { error: uploadError } = await supabase.storage.from('books').upload(`${userId}/${book.fileHash}`, rawBlob, {
-                    upsert: false // Keep it fast: fails silently if it already exists
+                const isEpub = book.fileName.toLowerCase().endsWith('.epub');
+                const contentType = isEpub ? 'application/epub+zip' : 'application/pdf';
+                // Convert to array buffer explicitly to bypass subtle SDK blob-serialization bugs
+                const buffer = await rawBlob.arrayBuffer();
+
+                console.log(`☁️ Pushing raw file to cloud storage: ${book.fileName}`);
+                const { error: uploadError } = await supabase.storage.from('books').upload(`${userId}/${book.fileHash}`, buffer, {
+                    upsert: false, // Keep it fast: fails silently if it already exists
+                    contentType: contentType
                 });
                 if (uploadError && uploadError.message !== 'The resource already exists') {
                     console.error('Failed to push raw file to storage:', uploadError);
+                } else if (!uploadError) {
+                    console.log(`✅ Push success: ${book.fileName}`);
                 }
             }
 
