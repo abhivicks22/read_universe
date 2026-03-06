@@ -159,7 +159,7 @@ function ReaderContent() {
                 onExport={handleExport}
             />
             <div className="flex-1 flex overflow-hidden relative">
-                <Sidebar />
+                <Sidebar onEntityClick={(e) => setWikiEntity(e)} />
                 <div className="flex-1 flex flex-col overflow-hidden">
                     <ReadingRuler />
                     <ReaderView onTranslate={handleTranslate} />
@@ -168,7 +168,7 @@ function ReaderContent() {
             </div>
             <SettingsPanel />
             <DictionaryPopup />
-            <HighlightPopup />
+            <HighlightPopup onTranslate={handleTranslate} />
             <SearchOverlay />
             <NoteEditor />
             {flashcardOpen && <FlashcardMode isOverlay onClose={toggleFlashcard} />}

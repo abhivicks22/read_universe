@@ -16,7 +16,7 @@ interface SearchResult {
     matchIndex: number;
 }
 
-export type SidebarTab = 'pages' | 'bookmarks' | 'highlights' | 'notes' | 'search';
+export type SidebarTab = 'pages' | 'bookmarks' | 'highlights' | 'notes' | 'search' | 'entities';
 
 interface HighlightSelection {
     text: string;

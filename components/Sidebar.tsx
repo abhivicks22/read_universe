@@ -1,7 +1,9 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useReaderStore } from '@/stores/readerStore';
 import { removeBookmark, removeHighlight, removeNote as removeNoteDB } from '@/lib/storage';
+import { extractEntities, type EntityResult } from '@/lib/entities';
 import type { SidebarTab } from '@/stores/readerStore';
 
 const TABS: { id: SidebarTab; label: string; icon: string }[] = [
@@ -10,9 +12,10 @@ const TABS: { id: SidebarTab; label: string; icon: string }[] = [
     { id: 'highlights', label: 'Highlights', icon: '🖍️' },
     { id: 'notes', label: 'Notes', icon: '📝' },
     { id: 'search', label: 'Search', icon: '🔍' },
+    { id: 'entities', label: 'AI', icon: '🧠' },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onEntityClick }: { onEntityClick?: (entity: string) => void } = {}) {
     const {
         sidebarOpen, toggleSidebar, sidebarTab, setSidebarTab,
         pages, currentPage, setCurrentPage,
@@ -56,6 +59,7 @@ export default function Sidebar() {
                     {sidebarTab === 'highlights' && <HighlightsTab highlights={highlights} setCurrentPage={setCurrentPage} toggleSidebar={toggleSidebar} onRemove={async (id) => { await removeHighlight(id); removeHighlightFromState(id); }} />}
                     {sidebarTab === 'notes' && <NotesTab notes={notes} setCurrentPage={setCurrentPage} toggleSidebar={toggleSidebar} onRemove={async (id) => { await removeNoteDB(id); removeNoteFromState(id); }} />}
                     {sidebarTab === 'search' && <SearchTab results={searchResults} query={searchQuery} onSearch={performSearch} setCurrentPage={setCurrentPage} toggleSidebar={toggleSidebar} />}
+                    {sidebarTab === 'entities' && <EntitiesTab pages={pages} onEntityClick={onEntityClick} />}
                 </div>
             </aside>
         </>
@@ -174,6 +178,78 @@ function SearchTab({ results, query, onSearch, setCurrentPage, toggleSidebar }: 
                 ))}
             </div>
             {!query && <EmptyTab icon="🔍" text="Search your document" sub="Type above to search." />}
+        </div>
+    );
+}
+
+function EntitiesTab({ pages, onEntityClick }: { pages: string[]; onEntityClick?: (entity: string) => void }) {
+    const [entities, setEntities] = useState<EntityResult | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'people' | 'places' | 'organizations'>('people');
+
+    useEffect(() => {
+        if (pages.length > 0 && !entities) {
+            setLoading(true);
+            extractEntities(pages).then((result) => {
+                setEntities(result);
+                setLoading(false);
+            });
+        }
+    }, [pages, entities]);
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                    <div className="w-6 h-6 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: 'var(--ag-border)', borderTopColor: 'var(--ag-accent)' }} />
+                    <p className="text-[10px] mt-2" style={{ color: 'var(--ag-text-muted)' }}>Analyzing text...</p>
+                </div>
+            </div>
+        );
+    }
+
+    const categories = [
+        { id: 'people' as const, label: 'People', icon: '👤', items: entities?.people || [] },
+        { id: 'places' as const, label: 'Places', icon: '📍', items: entities?.places || [] },
+        { id: 'organizations' as const, label: 'Orgs', icon: '🏢', items: entities?.organizations || [] },
+    ];
+
+    const currentItems = categories.find((c) => c.id === activeTab)?.items || [];
+
+    return (
+        <div className="p-2">
+            <div className="flex gap-1 mb-2">
+                {categories.map((cat) => (
+                    <button
+                        key={cat.id}
+                        onClick={() => setActiveTab(cat.id)}
+                        className="flex-1 text-[10px] py-1.5 rounded-lg font-medium transition-all"
+                        style={{
+                            backgroundColor: activeTab === cat.id ? 'var(--ag-accent-soft)' : 'transparent',
+                            color: activeTab === cat.id ? 'var(--ag-accent)' : 'var(--ag-text-muted)',
+                        }}
+                    >
+                        {cat.icon} {cat.label} ({cat.items.length})
+                    </button>
+                ))}
+            </div>
+            {currentItems.length === 0 ? (
+                <EmptyTab icon={categories.find((c) => c.id === activeTab)?.icon || '🧠'} text={`No ${activeTab} found`} sub="Try with a longer document." />
+            ) : (
+                <div className="space-y-1">
+                    {currentItems.map((entity, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => onEntityClick?.(entity)}
+                            className="w-full text-left px-3 py-2 rounded-lg text-xs hover:opacity-80 flex items-center justify-between"
+                            style={{ backgroundColor: 'var(--ag-card)', color: 'var(--ag-text)' }}
+                        >
+                            <span>{entity}</span>
+                            <span className="text-[9px]" style={{ color: 'var(--ag-accent)' }}>Wiki →</span>
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
