@@ -53,6 +53,10 @@ export default function LibraryPage() {
 
     useEffect(() => {
         loadBooks();
+
+        // Listen for background sync engine updates
+        window.addEventListener('library-updated', loadBooks);
+        return () => window.removeEventListener('library-updated', loadBooks);
     }, [loadBooks]);
 
     const handleDelete = async (fileHash: string) => {

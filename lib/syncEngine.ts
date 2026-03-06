@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { parsePDF } from './pdfParser';
+import { parseEPUB } from './epubParser';
 import {
     getAllParsedBooks,
     getAllProgress,
@@ -11,6 +13,9 @@ import {
     addHighlight,
     addNote,
     addVocabWord,
+    getRawFile,
+    saveRawFile,
+    saveParsedBook,
     type ReadingProgress,
     type Bookmark,
     type Highlight,
@@ -41,6 +46,17 @@ export async function pushSync() {
                 parsed_at: book.parsedAt,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'user_id,file_hash' });
+
+            // Ensure the raw file is in the storage bucket
+            const rawBlob = await getRawFile(book.fileHash);
+            if (rawBlob) {
+                const { error: uploadError } = await supabase.storage.from('books').upload(`${userId}/${book.fileHash}`, rawBlob, {
+                    upsert: false // Keep it fast: fails silently if it already exists
+                });
+                if (uploadError && uploadError.message !== 'The resource already exists') {
+                    console.error('Failed to push raw file to storage:', uploadError);
+                }
+            }
 
             // Sync annotations for this book
             const bookmarks = await getBookmarksByBook(book.fileHash);
@@ -135,6 +151,48 @@ export async function pullSync() {
     if (!session?.user) return;
 
     try {
+        // 0. Pull new books (download raw file and parse)
+        const { data: cloudBooks } = await supabase.from('books').select('*');
+        if (cloudBooks) {
+            const localBooks = await getAllParsedBooks();
+            for (const cb of cloudBooks) {
+                const existsLocally = localBooks.some(lb => lb.fileHash === cb.file_hash);
+                if (!existsLocally) {
+                    console.log(`Downloading new book from cloud: ${cb.file_name}`);
+                    const { data: blob, error: downloadError } = await supabase.storage.from('books').download(`${session.user.id}/${cb.file_hash}`);
+
+                    if (blob && !downloadError) {
+                        try {
+                            const isEpub = cb.file_name.toLowerCase().endsWith('.epub');
+                            const file = new File([blob], cb.file_name, { type: isEpub ? 'application/epub+zip' : 'application/pdf' });
+
+                            const result = isEpub ? await parseEPUB(file) : await parsePDF(file);
+
+                            await saveParsedBook({
+                                fileHash: cb.file_hash,
+                                fileName: cb.file_name,
+                                pages: result.pages,
+                                structuredPages: result.structuredPages,
+                                totalPages: result.totalPages,
+                                wordCount: result.wordCount,
+                            });
+                            await saveRawFile(cb.file_hash, file);
+                            console.log(`Successfully parsed and saved downloaded book: ${cb.file_name}`);
+
+                            // Let the UI know a new book just magically appeared
+                            if (typeof window !== 'undefined') {
+                                window.dispatchEvent(new Event('library-updated'));
+                            }
+                        } catch (parseErr) {
+                            console.error('Failed to parse downloaded book:', cb.file_name, parseErr);
+                        }
+                    } else if (downloadError) {
+                        console.error('Failed to download book from storage:', downloadError);
+                    }
+                }
+            }
+        }
+
         // 1. Pull Progress (Keep latest)
         const { data: cloudProgress } = await supabase.from('reading_progress').select('*');
         if (cloudProgress) {

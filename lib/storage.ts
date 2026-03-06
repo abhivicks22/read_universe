@@ -92,6 +92,11 @@ export interface BookPage {
     structuredBlocks?: ContentBlock[];
 }
 
+export interface RawFile {
+    fileHash: string;
+    blob: Blob;
+}
+
 interface AntiGravityDB extends DBSchema {
     preferences: {
         key: string;
@@ -120,6 +125,10 @@ interface AntiGravityDB extends DBSchema {
         indexes: {
             'by-book': string;
         };
+    };
+    rawFiles: {
+        key: string;
+        value: RawFile;
     };
     bookmarks: {
         key: number;
@@ -162,7 +171,7 @@ let dbPromise: Promise<IDBPDatabase<AntiGravityDB>> | null = null;
 
 function getDB(): Promise<IDBPDatabase<AntiGravityDB>> {
     if (!dbPromise) {
-        dbPromise = openDB<AntiGravityDB>('antigravity', 4, {
+        dbPromise = openDB<AntiGravityDB>('antigravity', 5, {
             upgrade(db, oldVersion) {
                 if (oldVersion < 1) {
                     db.createObjectStore('preferences');
@@ -208,6 +217,15 @@ function getDB(): Promise<IDBPDatabase<AntiGravityDB>> {
                         const sessStore = db.createObjectStore('readingSessions', { keyPath: 'id', autoIncrement: true });
                         sessStore.createIndex('by-book', 'fileHash');
                         sessStore.createIndex('by-date', 'date');
+                    }
+                }
+                if (oldVersion < 5) {
+                    if (!db.objectStoreNames.contains('bookPages')) {
+                        const pagesStore = db.createObjectStore('bookPages', { keyPath: 'id' });
+                        pagesStore.createIndex('by-book', 'fileHash');
+                    }
+                    if (!db.objectStoreNames.contains('rawFiles')) {
+                        db.createObjectStore('rawFiles', { keyPath: 'fileHash' });
                     }
                 }
             },
@@ -354,6 +372,25 @@ export async function deleteParsedBook(fileHash: string): Promise<void> {
 }
 
 /* ============================================
+   Raw Files
+   ============================================ */
+export async function saveRawFile(fileHash: string, blob: Blob): Promise<void> {
+    const db = await getDB();
+    await db.put('rawFiles', { fileHash, blob });
+}
+
+export async function getRawFile(fileHash: string): Promise<Blob | undefined> {
+    const db = await getDB();
+    const result = await db.get('rawFiles', fileHash);
+    return result?.blob;
+}
+
+export async function deleteRawFile(fileHash: string): Promise<void> {
+    const db = await getDB();
+    await db.delete('rawFiles', fileHash);
+}
+
+/* ============================================
    Bookmarks
    ============================================ */
 export async function addBookmark(bm: Omit<Bookmark, 'id'>): Promise<number> {
@@ -489,6 +526,7 @@ export async function deleteBookData(fileHash: string): Promise<void> {
     const db = await getDB();
     await deleteParsedBook(fileHash);
     await db.delete('readingProgress', fileHash);
+    await deleteRawFile(fileHash);
 
     const bookmarks = await db.getAllFromIndex('bookmarks', 'by-book', fileHash);
     for (const bm of bookmarks) { if (bm.id) await db.delete('bookmarks', bm.id); }

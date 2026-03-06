@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import UploadZone from '@/components/UploadZone';
 import { parsePDF } from '@/lib/pdfParser';
 import { parseEPUB } from '@/lib/epubParser';
-import { generateFileHash, saveParsedBook, saveProgress, getPreferences } from '@/lib/storage';
+import { generateFileHash, saveParsedBook, saveProgress, getPreferences, saveRawFile } from '@/lib/storage';
 import { themes, applyTheme } from '@/lib/themes';
 import type { ThemeId } from '@/lib/themes';
 import { exportAllData, importAllData } from '@/lib/dataExport';
@@ -76,6 +76,9 @@ export default function UploadPage() {
           lastReadAt: new Date().toISOString(),
           wordCount: result.wordCount,
         });
+
+        // Store the raw file specifically so the Cloud Sync Engine has the bytes to upload
+        await saveRawFile(hash, file);
 
         router.push(`/reader?id=${hash}`);
       } catch (error: any) {
