@@ -71,3 +71,22 @@ CREATE POLICY "Users can manage their own books" ON books FOR ALL USING (auth.ui
 CREATE POLICY "Users can manage their own progress" ON reading_progress FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own annotations" ON annotations FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage their own vocabulary" ON vocabulary FOR ALL USING (auth.uid() = user_id);
+
+-- 7. Storage Bucket configuration for raw physical books
+-- (You must run this in the Supabase SQL editor to allow users to upload/download PDFs)
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('books', 'books', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Enable RLS for the books bucket
+CREATE POLICY "Users can upload their own books"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+CREATE POLICY "Users can download their own books"
+ON storage.objects FOR SELECT TO authenticated
+USING (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+CREATE POLICY "Users can delete their own books"
+ON storage.objects FOR DELETE TO authenticated
+USING (bucket_id = 'books' AND auth.uid()::text = (storage.foldername(name))[1]);
