@@ -79,11 +79,17 @@ export interface ReadingSession {
 interface ParsedBook {
     fileHash: string;
     fileName: string;
-    pages: string[];
-    structuredPages?: ContentBlock[][];
     totalPages: number;
     wordCount: number;
     parsedAt: string;
+}
+
+export interface BookPage {
+    id: string; // fileHash_pageNumber
+    fileHash: string;
+    pageNumber: number;
+    text: string;
+    structuredBlocks?: ContentBlock[];
 }
 
 interface AntiGravityDB extends DBSchema {
@@ -107,6 +113,13 @@ interface AntiGravityDB extends DBSchema {
     parsedBooks: {
         key: string;
         value: ParsedBook;
+    };
+    bookPages: {
+        key: string;
+        value: BookPage;
+        indexes: {
+            'by-book': string;
+        };
     };
     bookmarks: {
         key: number;
@@ -165,6 +178,10 @@ function getDB(): Promise<IDBPDatabase<AntiGravityDB>> {
                 if (oldVersion < 2) {
                     if (!db.objectStoreNames.contains('parsedBooks')) {
                         db.createObjectStore('parsedBooks', { keyPath: 'fileHash' });
+                    }
+                    if (!db.objectStoreNames.contains('bookPages')) {
+                        const pagesStore = db.createObjectStore('bookPages', { keyPath: 'id' });
+                        pagesStore.createIndex('by-book', 'fileHash');
                     }
                 }
                 if (oldVersion < 3) {
@@ -256,6 +273,9 @@ export async function deleteProgress(fileHash: string): Promise<void> {
 /* ============================================
    Parsed Books
    ============================================ */
+/* ============================================
+   Parsed Books & Pages
+   ============================================ */
 export async function saveParsedBook(data: {
     fileHash: string;
     fileName: string;
@@ -265,12 +285,55 @@ export async function saveParsedBook(data: {
     wordCount: number;
 }): Promise<void> {
     const db = await getDB();
-    await db.put('parsedBooks', { ...data, parsedAt: new Date().toISOString() });
+
+    // Save metadata
+    await db.put('parsedBooks', {
+        fileHash: data.fileHash,
+        fileName: data.fileName,
+        totalPages: data.totalPages,
+        wordCount: data.wordCount,
+        parsedAt: new Date().toISOString()
+    });
+
+    // Save pages individually to avoid massive string limits on iOS Safari
+    const tx = db.transaction('bookPages', 'readwrite');
+    for (let i = 0; i < data.pages.length; i++) {
+        tx.store.put({
+            id: `${data.fileHash}_${i + 1}`,
+            fileHash: data.fileHash,
+            pageNumber: i + 1,
+            text: data.pages[i],
+            structuredBlocks: data.structuredPages?.[i]
+        });
+    }
+    await tx.done;
 }
 
-export async function getParsedBook(fileHash: string) {
+export async function getParsedBookMetadata(fileHash: string) {
     const db = await getDB();
     return db.get('parsedBooks', fileHash);
+}
+
+export async function getBookPages(fileHash: string): Promise<BookPage[]> {
+    const db = await getDB();
+    const pages = await db.getAllFromIndex('bookPages', 'by-book', fileHash);
+    return pages.sort((a, b) => a.pageNumber - b.pageNumber);
+}
+
+// Helper designed to maintain backwards compatibility with readerStore
+export async function getParsedBook(fileHash: string) {
+    const meta = await getParsedBookMetadata(fileHash);
+    if (!meta) return undefined;
+
+    const pageData = await getBookPages(fileHash);
+    const pages = pageData.map(p => p.text);
+    const structuredPages = pageData.map(p => p.structuredBlocks || []);
+
+    return {
+        ...meta,
+        pages,
+        structuredPages
+    };
 }
 
 export async function getAllParsedBooks(): Promise<ParsedBook[]> {
@@ -281,6 +344,13 @@ export async function getAllParsedBooks(): Promise<ParsedBook[]> {
 export async function deleteParsedBook(fileHash: string): Promise<void> {
     const db = await getDB();
     await db.delete('parsedBooks', fileHash);
+
+    const pages = await db.getAllFromIndex('bookPages', 'by-book', fileHash);
+    const tx = db.transaction('bookPages', 'readwrite');
+    for (const page of pages) {
+        tx.store.delete(page.id);
+    }
+    await tx.done;
 }
 
 /* ============================================
@@ -417,7 +487,7 @@ export async function getReadingStreak(): Promise<number> {
    ============================================ */
 export async function deleteBookData(fileHash: string): Promise<void> {
     const db = await getDB();
-    await db.delete('parsedBooks', fileHash);
+    await deleteParsedBook(fileHash);
     await db.delete('readingProgress', fileHash);
 
     const bookmarks = await db.getAllFromIndex('bookmarks', 'by-book', fileHash);
