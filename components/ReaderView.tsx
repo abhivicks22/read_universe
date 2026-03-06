@@ -5,7 +5,7 @@ import { useReaderStore } from '@/stores/readerStore';
 import { lookupWord, extractContextSentence } from '@/lib/dictionary';
 import { getHighlightBgColor } from '@/components/HighlightPopup';
 
-export default function ReaderView() {
+export default function ReaderView({ onTranslate }: { onTranslate?: (text: string, x: number, y: number) => void }) {
     const {
         pages, currentPage, totalPages,
         fontFamily, fontSize, lineHeight, twoColumn, continuousScroll,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, Suspense } from 'react';
+import { useEffect, useCallback, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useReaderStore } from '@/stores/readerStore';
 import {
@@ -8,6 +8,7 @@ import {
     getBookmarksByBook, getHighlightsByBook, getNotesByBook,
     addReadingSession,
 } from '@/lib/storage';
+import { exportAsMarkdown, downloadMarkdown } from '@/lib/exportNotes';
 import { applyTheme } from '@/lib/themes';
 import TopBar from '@/components/TopBar';
 import Sidebar from '@/components/Sidebar';
@@ -20,6 +21,10 @@ import HighlightPopup from '@/components/HighlightPopup';
 import SearchOverlay from '@/components/SearchOverlay';
 import NoteEditor from '@/components/NoteEditor';
 import ReadingRuler from '@/components/ReadingRuler';
+import EntityPanel from '@/components/EntityPanel';
+import SummaryPanel from '@/components/SummaryPanel';
+import WikiPopup from '@/components/WikiPopup';
+import TranslatePopup from '@/components/TranslatePopup';
 
 function ReaderContent() {
     const searchParams = useSearchParams();
@@ -31,19 +36,23 @@ function ReaderContent() {
         setLoading, loading, currentPage, totalPages, fileHash, fileName,
         nextPage, prevPage, closeAllPanels, flashcardOpen, toggleFlashcard,
         setBookmarks, setHighlights, setNotes,
+        bookmarks, highlights, notes,
         startSession, pagesReadThisSession, getSessionDuration,
-        toggleSearch,
+        toggleSearch, highlightSelection,
     } = useReaderStore();
 
-    // Load book data from IndexedDB
+    // Phase 3 panel states
+    const [entityPanelOpen, setEntityPanelOpen] = useState(false);
+    const [summaryOpen, setSummaryOpen] = useState(false);
+    const [wikiEntity, setWikiEntity] = useState<string | null>(null);
+    const [translateState, setTranslateState] = useState<{ text: string; x: number; y: number } | null>(null);
+
+    // Load book data
     useEffect(() => {
         if (!bookId) return;
-
         const loadBook = async () => {
             setLoading(true);
-
             try {
-                // Load preferences
                 const prefs = await getPreferences();
                 setTheme(prefs.theme);
                 setFontFamily(prefs.fontFamily);
@@ -54,32 +63,21 @@ function ReaderContent() {
                 setReadingRuler(prefs.readingRuler || false);
                 applyTheme(prefs.theme);
 
-                // Load parsed book
                 const book = await getParsedBook(bookId);
-                if (!book) {
-                    window.location.href = '/';
-                    return;
-                }
-
+                if (!book) { window.location.href = '/'; return; }
                 setPages(book.pages, book.fileName, book.fileHash);
 
-                // Restore reading progress
                 const progress = await getProgress(bookId);
-                if (progress && progress.currentPage > 0) {
-                    setCurrentPage(progress.currentPage);
-                }
+                if (progress && progress.currentPage > 0) setCurrentPage(progress.currentPage);
 
-                // Load annotations
-                const [bookmarks, highlights, notes] = await Promise.all([
+                const [bms, hls, nts] = await Promise.all([
                     getBookmarksByBook(bookId),
                     getHighlightsByBook(bookId),
                     getNotesByBook(bookId),
                 ]);
-                setBookmarks(bookmarks);
-                setHighlights(highlights);
-                setNotes(notes);
-
-                // Start reading session tracking
+                setBookmarks(bms);
+                setHighlights(hls);
+                setNotes(nts);
                 startSession();
             } catch (error) {
                 console.error('Failed to load book:', error);
@@ -88,58 +86,45 @@ function ReaderContent() {
                 setLoading(false);
             }
         };
-
         loadBook();
     }, [bookId, setPages, setCurrentPage, setTheme, setFontFamily, setFontSize, setLineHeight, setTwoColumn, setContinuousScroll, setReadingRuler, setLoading, setBookmarks, setHighlights, setNotes, startSession]);
 
-    // Save progress when page changes
+    // Save progress
     useEffect(() => {
         if (!fileHash || !totalPages || !currentPage) return;
-
         const timeout = setTimeout(() => {
-            saveProgress({
-                fileHash,
-                fileName,
-                currentPage,
-                totalPages,
-                percent: Math.round((currentPage / totalPages) * 100),
-                lastReadAt: new Date().toISOString(),
-                wordCount: 0,
-            });
+            saveProgress({ fileHash, fileName, currentPage, totalPages, percent: Math.round((currentPage / totalPages) * 100), lastReadAt: new Date().toISOString(), wordCount: 0 });
         }, 500);
-
         return () => clearTimeout(timeout);
     }, [currentPage, fileHash, fileName, totalPages]);
 
-    // Save reading session on unmount
+    // Save session on unmount
     useEffect(() => {
         return () => {
             const duration = getSessionDuration();
             const pagesRead = pagesReadThisSession.size;
             if (fileHash && duration > 5000 && pagesRead > 0) {
-                addReadingSession({
-                    fileHash,
-                    date: new Date().toISOString().split('T')[0],
-                    pagesRead,
-                    timeSpentMs: duration,
-                });
+                addReadingSession({ fileHash, date: new Date().toISOString().split('T')[0], pagesRead, timeSpentMs: duration });
             }
         };
     }, [fileHash, getSessionDuration, pagesReadThisSession]);
+
+    // Export handler
+    const handleExport = useCallback(() => {
+        const md = exportAsMarkdown(fileName, bookmarks, highlights, notes);
+        downloadMarkdown(md, `${fileName.replace('.pdf', '')}_notes.md`);
+    }, [fileName, bookmarks, highlights, notes]);
 
     // Keyboard shortcuts
     const handleKeyDown = useCallback(
         (e: KeyboardEvent) => {
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
             switch (e.key) {
                 case 'ArrowRight': e.preventDefault(); nextPage(); break;
                 case ' ': e.preventDefault(); nextPage(); break;
                 case 'ArrowLeft': e.preventDefault(); prevPage(); break;
-                case 'Escape': closeAllPanels(); break;
-                case 'f':
-                    if (e.ctrlKey || e.metaKey) { e.preventDefault(); toggleSearch(); }
-                    break;
+                case 'Escape': closeAllPanels(); setEntityPanelOpen(false); setSummaryOpen(false); setWikiEntity(null); setTranslateState(null); break;
+                case 'f': if (e.ctrlKey || e.metaKey) { e.preventDefault(); toggleSearch(); } break;
             }
         },
         [nextPage, prevPage, closeAllPanels, toggleSearch]
@@ -150,12 +135,16 @@ function ReaderContent() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [handleKeyDown]);
 
+    // Handle translate from highlight popup
+    const handleTranslate = useCallback((text: string, x: number, y: number) => {
+        setTranslateState({ text, x, y });
+    }, []);
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--ag-bg)' }}>
                 <div className="text-center">
-                    <div className="w-10 h-10 border-2 rounded-full animate-spin mx-auto"
-                        style={{ borderColor: 'var(--ag-border)', borderTopColor: 'var(--ag-accent)' }} />
+                    <div className="w-10 h-10 border-2 rounded-full animate-spin mx-auto" style={{ borderColor: 'var(--ag-border)', borderTopColor: 'var(--ag-accent)' }} />
                     <p className="text-sm mt-4" style={{ color: 'var(--ag-text-muted)' }}>Loading your book...</p>
                 </div>
             </div>
@@ -164,12 +153,16 @@ function ReaderContent() {
 
     return (
         <div className="h-screen flex flex-col" style={{ backgroundColor: 'var(--ag-bg)' }}>
-            <TopBar />
+            <TopBar
+                onEntityPanel={() => setEntityPanelOpen(true)}
+                onSummary={() => setSummaryOpen(true)}
+                onExport={handleExport}
+            />
             <div className="flex-1 flex overflow-hidden relative">
                 <Sidebar />
                 <div className="flex-1 flex flex-col overflow-hidden">
                     <ReadingRuler />
-                    <ReaderView />
+                    <ReaderView onTranslate={handleTranslate} />
                     <ProgressBar />
                 </div>
             </div>
@@ -179,6 +172,10 @@ function ReaderContent() {
             <SearchOverlay />
             <NoteEditor />
             {flashcardOpen && <FlashcardMode isOverlay onClose={toggleFlashcard} />}
+            <EntityPanel isOpen={entityPanelOpen} onClose={() => setEntityPanelOpen(false)} onEntityClick={(e) => { setWikiEntity(e); }} />
+            {summaryOpen && <SummaryPanel isOpen={summaryOpen} onClose={() => setSummaryOpen(false)} />}
+            {wikiEntity && <WikiPopup entity={wikiEntity} onClose={() => setWikiEntity(null)} />}
+            {translateState && <TranslatePopup text={translateState.text} x={translateState.x} y={translateState.y} onClose={() => setTranslateState(null)} />}
         </div>
     );
 }
