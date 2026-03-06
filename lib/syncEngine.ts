@@ -189,11 +189,9 @@ export async function pullSync() {
                             }
                         } catch (parseErr: any) {
                             console.error(`💥 Failed to parse downloaded book ${cb.file_name}:`, parseErr.message || String(parseErr));
-                            alert(`Failed to sync book ${cb.file_name}: ${parseErr.message || String(parseErr)}`);
                         }
                     } else if (downloadError) {
                         console.error('💥 Failed to download book from storage:', downloadError);
-                        alert(`Storage download error: ${downloadError.message}`);
                     }
                 } else {
                     console.log(`⏭️ Book ${cb.file_name} already exists locally. Skipping download.`);
