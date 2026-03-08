@@ -39,6 +39,12 @@ export const themes: ThemeDefinition[] = [
 ];
 
 export const readingFonts = [
+  { name: 'Bookerly', family: "'Bookerly', serif", category: 'serif' },
+  { name: 'Caecilia', family: "'PMN Caecilia', 'Caecilia', serif", category: 'serif' },
+  { name: 'Georgia', family: "'Georgia', serif", category: 'serif' },
+  { name: 'Baskerville', family: "'Baskerville', 'Libre Baskerville', serif", category: 'serif' },
+  { name: 'Palatino', family: "'Palatino', 'Palatino Linotype', serif", category: 'serif' },
+  { name: 'Futura', family: "'Futura', 'Trebuchet MS', sans-serif", category: 'sans' },
   { name: 'Literata', family: "'Literata', serif", category: 'serif' },
   { name: 'Merriweather', family: "'Merriweather', serif", category: 'serif' },
   { name: 'Lora', family: "'Lora', serif", category: 'serif' },
